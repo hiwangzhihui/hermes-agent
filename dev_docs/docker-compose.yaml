@@ -1,0 +1,62 @@
+services:
+  hermes:
+    image: nousresearch/hermes-agent:latest
+    container_name: hermes
+    restart: unless-stopped
+    command: gateway run
+    ports:
+      - "8642:8642"
+    volumes:
+      - ~/.hermes:/opt/data
+    networks:
+      - hermes-net
+    # If you use browser automation (Playwright/Chromium), uncomment:
+    # shm_size: "1gb"
+
+  dashboard:
+    image: nousresearch/hermes-agent:latest
+    container_name: hermes-dashboard
+    restart: unless-stopped
+    # Exposing dashboard on 0.0.0.0 requires explicit insecure mode.
+    # Use only on trusted networks.
+    command: dashboard --host 0.0.0.0 --insecure
+    profiles: ["dashboard"]
+    ports:
+      - "9119:9119"
+    volumes:
+      - ~/.hermes:/opt/data
+    environment:
+      - GATEWAY_HEALTH_URL=http://hermes:8642
+    networks:
+      - hermes-net
+    depends_on:
+      - hermes
+
+  hermes-webui:
+    image: ghcr.io/nesquena/hermes-webui:latest
+    container_name: hermes-webui
+    restart: unless-stopped
+    profiles: ["webui"]
+    ports:
+      - "8787:8787"
+    environment:
+      # IMPORTANT: match host UID/GID to avoid ~/.hermes permission issues.
+      - WANTED_UID=${WANTED_UID:-1000}
+      - WANTED_GID=${WANTED_GID:-1000}
+      - HERMES_WEBUI_AGENT_DIR=/opt/hermes-agent
+      - HERMES_WEBUI_AUTO_INSTALL=1
+      - HERMES_WEBUI_STATE_DIR=/home/hermeswebui/.hermes/webui-mvp
+      # Optional but strongly recommended when exposing beyond localhost.
+      # - HERMES_WEBUI_PASSWORD=change-me
+    volumes:
+      - ~/.hermes:/home/hermeswebui/.hermes
+      - /home/wang/my_work/hermes-agent:/opt/hermes-agent
+      - ~/my_work:/workspace
+    networks:
+      - hermes-net
+    depends_on:
+      - hermes
+
+networks:
+  hermes-net:
+    driver: bridge
